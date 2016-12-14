@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>
+    D3 Visualization
+  </title>
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+  <script src='http://d3js.org/d3.v3.min.js'></script>
+  <script src="FlickrUtil.js"></script>
+  <script type="text/css" src="http://code.jquery.com/ui/1.11.0/themes/smoothness/jquery-ui.css"></script>
+  <script type='text/javascript' src="http://ajax.googleapis.com/ajax/libs/jqueryui/1.11.4/jquery-ui.min.js"></script>
+  <style>
+  body {
+    font-size: 18px
+  }
+  
+  .center-form {
+    text-align: center;
+    width: 70%;
+    margin: 0 auto;
+  }
+  
+  #iframe {
+    border: 1px solid #d3d3d3;
+  }
+  </style>
+</head>
+
+<body>
+  <nav class="navbar navbar-inverse">
+    <div class="container-fluid">
+      <p class="navbar-brand">D3 Visulalizations using Force Layout</p>
+      <div class="navbar-form">
+        <div class="ui-widget center-form">
+          <input id="tags" class="form-control input-md" placeholder="Search for Tags">
+          <button class="btn btn-primary" onclick="searchNode()"> SEARCH </button>
+          <button class="btn btn-warning" onclick="reset()"> RESET </button>
+        </div>
+      </div>
+    </div>
+  </nav>
+  <h1 class="col-lg-12 col-md-12 col-sm-12 text-center">Tag associations on Flickr photos </h1>
+  <div class="container">
+    <div class="row">
+      <iframe id="iframe" class="col-lg-12 col-md-12 col-sm-12 col-xs-12" height="550px">
+      </iframe>
+    </div>
+    <div class="row">
+      <ul>
+        <li>
+          <p> Nodes represent the comprehensive list of all the tags on all photos. </p>
+        </li>
+        <li>
+          <p> Node size represents the frequency of the tag. </p>
+        </li>
+        <li>
+          <p> Link signifies co-occurances of the tags and thickness of the link signifies frequency co-occurances of the tags. </p>
+          <p> For eg: the tags "itsalive" and "macromondays" appear many times together in photos compared to "alive" and "macromondays".
+          </p>
+        </li>
+        <li>
+          <p> Search for a specific tag using the search box and see all tags which are connected to the one you searched for. </p>
+        </li>
+        <li>
+          <p> Clear the search by clicking on "RESET" </p>
+        </li>
+      </ul>
+    </div>
+  </div>
+  <script type="text/javascript">
+  var url = "https://api.flickr.com/services/rest/?method=flickr.interestingness.getList&api_key=05138fb5dbd2cce1ba2b4e069a11efa8&extras=tags%2Ccount_views&format=json&nojsoncallback=1";
+
+  var flickrData, force, circle, text, path, svg;
+  var nodes = [],
+    links = [];
+
+  var width = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth,
+    height = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight;
+
+  var div = document.createElement("div");
+  div.id = "chart";
+
+  $('#iframe')
+    .contents().find('body')
+    .append(div);
+
+  var cssLink = document.createElement("link");
+  cssLink.href = "style.css";
+  cssLink.rel = "stylesheet";
+  cssLink.type = "text/css";
+  $('#iframe')
+    .contents().find("body").append(cssLink);
+
+  $('#chart').ready(function() {
+    var chart = $('#iframe')
+      .contents().find('#chart')[0]
+
+    svg = d3.select(chart)
+      .append("svg")
+      .attr("width", 1700)
+      .attr("height", 1000);
+  });
+
+  var nodeColor = d3.scale.category10();
+  var radioScale = d3.scale.linear().range([2, 50]);
+  var edgeColorScale = d3.scale.linear().range(["blue", "red", "green", "yellow"]);
+  var edgeWidthScale = d3.scale.linear().range([1, 5]);
+  var opacityScale = d3.scale.linear().range([0.1, 0.8]);
+
+  function update(nodes, links) {
+    force = d3.layout.force()
+      .nodes(nodes)
+      .links(links)
+      .size([width, height])
+      .linkDistance(350)
+      .charge(-650)
+      .gravity(0.3)
+      .on("tick", tick)
+      .alpha(0)
+      .start();
+
+    radioScale.domain(d3.extent(nodes, function(d) {
+      return d.value;
+    }));
+
+    edgeColorScale.domain(d3.extent(links, function(d) {
+      return d.value;
+    }));
+
+    edgeWidthScale.domain(d3.extent(links, function(d) {
+      return d.value;
+    }));
+
+    path = svg.selectAll("path")
+      .data(force.links())
+      .enter()
+      .append("path")
+      .attr("class", "link")
+      .style("stroke", function(d) {
+        return edgeColorScale(d.value);
+      })
+      .style("stroke-width", function(d) {
+        return edgeWidthScale(d.value) + "px";
+      });
+
+    circle = svg.selectAll("circle")
+      .data(force.nodes())
+      .enter()
+      .append("circle")
+      .attr("class", "node")
+      .attr("r", function(d) {
+        return radioScale(d.value);
+      })
+      .style("fill", function(d) {
+        return nodeColor(d.value);
+      })
+      .call(force.drag);
+
+    text = svg.selectAll("g")
+      .data(force.nodes())
+      .enter()
+      .append("svg:g");
+
+    // with shadow
+    text.append("svg:text")
+      .attr("x", 0)
+      .attr("y", 0)
+      .attr("class", "shadow")
+      .text(function(d) {
+        return d.name
+      });
+
+    text.append("svg:text")
+      .attr("x", 0)
+      .attr("y", 0)
+      .text(function(d) {
+        return d.name
+      });
+  }
+
+  function tick(event) {
+    path.attr("d", function(d) {
+      var dx = d.target.x - d.source.x,
+        dy = d.target.y - d.source.y,
+        dr = Math.sqrt(dx * dx + dy * dy);
+      return "M" + d.source.x + "," + d.source.y + "A" + dr + "," + dr + " 0 0 1," + d.target.x + "," + d.target.y;
+    });
+
+
+    circle.attr("transform", function(d) {
+      return "translate(" + d.x + "," + d.y + ")";
+    });
+
+    text.attr("transform", function(d) {
+      return "translate(" + d.x + "," + d.y + ")";
+    });
+  }
+
+  var optArray = [];
+
+  d3.json(url, function(error, data) {
+    flickrData = FlickrUtils.getTagNetwork(data, 1);
+    nodes = flickrData.nodes;
+    links = flickrData.edges;
+    update(nodes, links);
+
+    for (var i = 0; i < nodes.length - 1; i++) {
+      optArray.push(nodes[i].name);
+    }
+    optArray = optArray.sort();
+  });
+
+  $(function() {
+    $("#tags").autocomplete({
+      source: optArray
+    });
+  });
+
+  function reset() {
+    document.getElementById('tags').value = "";
+    restart(nodes, links);
+  }
+
+  function searchNode() {
+    var selectedVal = document.getElementById('tags').value;
+    if (selectedVal === "") {
+      reset();
+    } else {
+
+      var newLinks = links.filter(function(d) {
+        return d.source.name == selectedVal.toLowerCase() || d.target.name == selectedVal.toLowerCase();
+      });
+
+      newLinksSource = newLinks.map(function(d) {
+        return d.source.name;
+      });
+
+      newLinksTarget = newLinks.map(function(d) {
+        return d.target.name;
+      });
+      var selectedNodes = nodes.filter(function(d) {
+        return newLinksSource.indexOf(d.name) != -1 || newLinksTarget.indexOf(d.name) != -1;
+      });
+
+      if (selectedNodes.length == 0) {
+        alert("No such tag exists!");
+        restart(nodes, edges);
+      } else
+        restart(selectedNodes, newLinks);
+    }
+  }
+
+  function restart(selectedNodes, newLinks) {
+
+    radioScale.domain(d3.extent(nodes, function(d) {
+      return d.value;
+    }));
+
+    edgeColorScale.domain(d3.extent(links, function(d) {
+      return d.value;
+    }));
+
+    path = path.data(newLinks);
+    path.exit().remove();
+
+    path.enter()
+      .append("path")
+      .attr("class", "link")
+      .style("stroke", function(d) {
+        return edgeColorScale(d.value);
+      })
+      .style("stroke-width", function(d) {
+        return edgeWidthScale(d.value) + "px";
+      });;
+
+    circle = circle.data(selectedNodes, function(d) {
+      return d.name;
+    });
+
+    circle.exit().remove();
+
+    circle.enter()
+      .append("circle")
+      .attr("class", "node")
+      .attr("r", function(d) {
+        return radioScale(d.value);
+      })
+      .style("fill", function(d) {
+        return nodeColor(d.weight);
+      })
+      .call(force.drag);
+
+    svg.selectAll("g").remove();
+
+    text = svg.selectAll("g")
+      .data(selectedNodes)
+      .enter()
+      .append("svg:g");
+
+    // with shadow
+    text.append("svg:text")
+      .attr("x", 12)
+      .attr("y", ".21em")
+      .style("font-size", function(d) {
+        return "15px";
+      })
+      .text(function(d) {
+        return d.name
+      });
+
+    force.on("tick", tick)
+      .start();
+  }
+  </script>
+</body>
